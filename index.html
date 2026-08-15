@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF Maker</title>
+<meta name="description" content="Bind images into a watermarked PDF, with crop and rotate — entirely in your browser, no uploads.">
+<style>
+  :root {
+    --ground: #f4f6f9;
+    --ground-raised: #ffffff;
+    --ink: #16233a;
+    --ink-dim: #5b7089;
+    --line: #c9d3e0;
+    --line-strong: #a9b8cc;
+    --accent: #2f6fb0;
+    --accent-ink: #ffffff;
+    --good: #1f8f5f;
+    --bad: #c0473f;
+    --font-display: "Bahnschrift", "Arial Narrow", "Helvetica Neue Condensed", sans-serif;
+    --font-body: "Segoe UI", "Calibri", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", Consolas, "Roboto Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1b2e;
+      --ground-raised: #14263f;
+      --ink: #eaf2fb;
+      --ink-dim: #83a7d1;
+      --line: #2a4463;
+      --line-strong: #3c5c86;
+      --accent: #7ec8e3;
+      --accent-ink: #0d1b2e;
+      --good: #5cd6a0;
+      --bad: #ef6b62;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1b2e;
+    --ground-raised: #14263f;
+    --ink: #eaf2fb;
+    --ink-dim: #83a7d1;
+    --line: #2a4463;
+    --line-strong: #3c5c86;
+    --accent: #7ec8e3;
+    --accent-ink: #0d1b2e;
+    --good: #5cd6a0;
+    --bad: #ef6b62;
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6f9;
+    --ground-raised: #ffffff;
+    --ink: #16233a;
+    --ink-dim: #5b7089;
+    --line: #c9d3e0;
+    --line-strong: #a9b8cc;
+    --accent: #2f6fb0;
+    --accent-ink: #ffffff;
+    --good: #1f8f5f;
+    --bad: #c0473f;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15.5px;
+    line-height: 1.55;
+    overflow-x: hidden;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 44px 24px 80px; }
+
+  header.hero { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(34px, 5.5vw, 50px);
+    letter-spacing: 0.005em;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .hero p {
+    max-width: 58ch;
+    color: var(--ink-dim);
+    margin: 0;
+    font-size: 16px;
+  }
+
+  /* ---------- sheet ---------- */
+  .sheet {
+    position: relative;
+    background: var(--ground-raised);
+    border: 1px solid var(--line);
+  }
+  .tick { position: absolute; width: 14px; height: 14px; pointer-events: none; }
+  .tick::before, .tick::after { content: ""; position: absolute; background: var(--line-strong); }
+  .tick::before { left: 6px; top: 0; width: 2px; height: 14px; }
+  .tick::after { left: 0; top: 6px; width: 14px; height: 2px; }
+  .tick.tl { top: -7px; left: -7px; }
+  .tick.tr { top: -7px; right: -7px; }
+  .tick.bl { bottom: -7px; left: -7px; }
+  .tick.br { bottom: -7px; right: -7px; }
+
+  .title-block {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .title-block h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 20px;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+  .sheet-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    padding: 4px 9px;
+  }
+
+  .sheet-body {
+    padding: 22px 24px 24px;
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px);
+    background-size: 26px 26px;
+    background-position: -1px -1px;
+  }
+
+  /* ---------- controls row ---------- */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 28px;
+    align-items: flex-end;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px dashed var(--line-strong);
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .field select, .field input[type="number"], .field input[type="text"] {
+    font-family: var(--font-body);
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--ground);
+    border: 1px solid var(--line-strong);
+    padding: 7px 10px;
+    min-width: 120px;
+  }
+  .field.range { min-width: 200px; }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+  .range-value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    min-width: 3.2em;
+    text-align: right;
+  }
+
+  /* ---------- dropzone ---------- */
+  .dropzone {
+    border: 1.5px dashed var(--line-strong);
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    color: var(--ink-dim);
+    font-size: 14px;
+    margin-bottom: 20px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .dropzone strong { color: var(--ink); }
+  .dropzone.drag-over {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    color: var(--ink);
+  }
+  .dropzone input { display: none; }
+
+  /* ---------- file list ---------- */
+  .file-list { display: flex; flex-direction: column; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-bottom: 16px; }
+  .file-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto auto auto auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: var(--ground-raised);
+  }
+  .file-row .thumb {
+    width: 40px; height: 40px;
+    object-fit: cover;
+    border: 1px solid var(--line);
+    display: block;
+  }
+  .file-row .name {
+    font-size: 13.5px;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file-row .meta {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .crop-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 1px 5px;
+    margin-left: 6px;
+  }
+  .row-btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: none;
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+    padding: 5px 9px;
+    cursor: pointer;
+  }
+  .row-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .row-btn.ghost { border-color: transparent; color: var(--ink-dim); padding: 5px 6px; }
+  .row-btn.ghost:hover { color: var(--bad); border-color: transparent; }
+  .row-order { display: flex; flex-direction: column; gap: 2px; }
+  .row-order button {
+    background: none; border: 1px solid var(--line-strong); color: var(--ink-dim);
+    font-size: 9px; line-height: 1; padding: 3px 5px; cursor: pointer;
+  }
+  .row-order button:hover { color: var(--accent); border-color: var(--accent); }
+  .row-order button:disabled { opacity: 0.25; cursor: default; }
+
+  .empty-note {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    padding: 10px 2px 18px;
+  }
+
+  /* ---------- sheet footer ---------- */
+  .sheet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding-top: 4px;
+  }
+
+  .btn-primary {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: 1px solid var(--accent);
+    padding: 11px 22px;
+    cursor: pointer;
+  }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-primary:disabled { opacity: 0.4; cursor: default; filter: none; }
+  .btn-secondary {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: none;
+    color: var(--ink);
+    border: 1px solid var(--line-strong);
+    padding: 10px 16px;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: default; }
+
+  .status-line {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent);
+    min-height: 1.4em;
+  }
+
+  footer.note {
+    margin-top: 36px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+    max-width: 68ch;
+  }
+
+  /* ---------- crop modal ---------- */
+  .crop-modal {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--ground) 75%, black 25%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .crop-panel {
+    background: var(--ground-raised);
+    border: 1px solid var(--line);
+    width: min(560px, 100%);
+    max-height: 92vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .crop-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .crop-panel-head span#crop-filename { font-weight: 400; color: var(--ink-dim); font-family: var(--font-mono); font-size: 12px; }
+  .crop-stage {
+    position: relative;
+    margin: 18px auto;
+    line-height: 0;
+    touch-action: none;
+    user-select: none;
+    background:
+      linear-gradient(45deg, color-mix(in srgb, var(--line) 40%, transparent) 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(-45deg, color-mix(in srgb, var(--line) 40%, transparent) 25%, transparent 25%) -8px 0/16px 16px;
+  }
+  .crop-stage img { display: block; max-width: 100%; }
+  .crop-box {
+    position: absolute;
+    border: 1.5px dashed var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    cursor: move;
+    box-sizing: border-box;
+  }
+  .crop-handle {
+    position: absolute;
+    right: -6px; bottom: -6px;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border: 1px solid var(--ground-raised);
+    cursor: nwse-resize;
+  }
+  .crop-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px 18px;
+    border-top: 1px solid var(--line);
+  }
+  .aspect-btns { display: flex; gap: 6px; }
+  .aspect-btns button {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: none;
+    border: 1px solid var(--line-strong);
+    color: var(--ink-dim);
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  .aspect-btns button.active { border-color: var(--accent); color: var(--accent); }
+  .crop-dims {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .crop-rotate-preview-frame {
+    width: 34px; height: 34px;
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .crop-rotate-preview-frame img {
+    max-width: 100%;
+    max-height: 100%;
+    transition: transform 0.15s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .crop-rotate-preview-frame img { transition: none; }
+  }
+
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 32px 16px 60px; }
+    .file-row { grid-template-columns: 36px 1fr; row-gap: 8px; }
+    .file-row .meta, .file-row .row-order, .file-row .row-btn { grid-column: 2; justify-self: start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Runs entirely in this tab</p>
+    <h1>PDF Maker</h1>
+    <p>Drop in images, reorder them, crop or rotate if you need to, and bind them into one PDF — with an optional watermark. Nothing leaves your browser.</p>
+  </header>
+
+  <section class="sheet" aria-labelledby="pdf-title">
+    <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+    <div class="title-block">
+      <h2 id="pdf-title">PDF Maker</h2>
+      <span class="sheet-tag" id="pdf-count">0 pages queued</span>
+    </div>
+    <div class="sheet-body">
+      <div class="controls">
+        <div class="field">
+          <label for="p-pagemode">Page size</label>
+          <select id="p-pagemode">
+            <option value="match" selected>Match each image</option>
+            <option value="a4">A4, image centered</option>
+          </select>
+        </div>
+        <div class="field range" id="p-quality-field">
+          <label for="p-quality">Image quality</label>
+          <div class="range-row">
+            <input type="range" id="p-quality" min="0.3" max="1" step="0.05" value="0.85">
+            <span class="range-value" id="p-quality-value">85%</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="p-watermark">Watermark text (optional)</label>
+          <input type="text" id="p-watermark" placeholder="e.g. CONFIDENTIAL" maxlength="60">
+        </div>
+      </div>
+
+      <div class="dropzone" id="p-dropzone" tabindex="0" role="button" aria-label="Add images to bind into a PDF">
+        <strong>Drop images here</strong> or click to browse — each becomes one page, in order
+        <input type="file" id="p-input" accept="image/*" multiple>
+      </div>
+
+      <div class="file-list" id="p-list" hidden></div>
+      <p class="empty-note" id="p-empty">No pages queued yet.</p>
+
+      <div class="sheet-footer">
+        <div class="status-line" id="p-status"></div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-secondary" id="p-print" disabled>Print last PDF</button>
+          <button class="btn-primary" id="p-build" disabled>Build PDF</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="note">
+    All processing happens locally via the Canvas API — files are never uploaded anywhere. Closing or reloading this tab discards everything; download what you need first.
+  </footer>
+</div>
+
+<div class="crop-modal" id="crop-modal" hidden>
+  <div class="crop-panel">
+    <div class="crop-panel-head">
+      <span>Crop &amp; resize <span id="crop-filename"></span></span>
+      <button class="row-btn ghost" id="crop-close" aria-label="Close editor">&times;</button>
+    </div>
+    <div class="crop-stage" id="crop-stage">
+      <img id="crop-img" alt="">
+      <div class="crop-box" id="crop-box">
+        <div class="crop-handle" id="crop-handle"></div>
+      </div>
+    </div>
+    <div class="crop-controls">
+      <div class="field">
+        <label>Aspect</label>
+        <div class="aspect-btns" id="crop-aspects">
+          <button type="button" data-aspect="free" class="active">Free</button>
+          <button type="button" data-aspect="1:1">1:1</button>
+          <button type="button" data-aspect="4:3">4:3</button>
+          <button type="button" data-aspect="16:9">16:9</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Rotate (applied after crop)</label>
+        <div class="aspect-btns" style="align-items:center;">
+          <button type="button" id="crop-rotate-ccw" aria-label="Rotate left 90 degrees">&#8634; 90&deg;</button>
+          <button type="button" id="crop-rotate-cw" aria-label="Rotate right 90 degrees">&#8635; 90&deg;</button>
+          <div class="crop-rotate-preview-frame">
+            <img id="crop-rotate-preview" alt="">
+          </div>
+        </div>
+      </div>
+      <span class="crop-dims" id="crop-dims">&mdash;</span>
+      <div style="margin-left:auto; display:flex; gap:10px;">
+        <button class="btn-secondary" id="crop-reset">Reset</button>
+        <button class="btn-primary" id="crop-apply">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  function formatBytes(n) {
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => resolve({ img, url });
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  function orientedDims(w, h, rotation) {
+    return rotation === 90 || rotation === 270 ? { w: h, h: w } : { w, h };
+  }
+
+  /* Draws a source rectangle (natural-image pixel coords, or the whole
+     image when no crop), capped to maxDim on its longest side and
+     rotated by a multiple of 90°. */
+  function drawCroppedRotated(img, cropRect, rotation, maxDim) {
+    rotation = ((rotation || 0) % 360 + 360) % 360;
+    const sx = cropRect ? cropRect.x : 0;
+    const sy = cropRect ? cropRect.y : 0;
+    const sw0 = cropRect ? cropRect.w : img.naturalWidth;
+    const sh0 = cropRect ? cropRect.h : img.naturalHeight;
+    const oriented = orientedDims(sw0, sh0, rotation);
+    let scale = 1;
+    if (maxDim && Math.max(oriented.w, oriented.h) > maxDim) {
+      scale = maxDim / Math.max(oriented.w, oriented.h);
+    }
+    const w = Math.max(1, Math.round(sw0 * scale));
+    const h = Math.max(1, Math.round(sh0 * scale));
+    const swap = rotation === 90 || rotation === 270;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = swap ? h : w;
+    canvas.height = swap ? w : h;
+    const ctx = canvas.getContext("2d");
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.drawImage(img, sx, sy, sw0, sh0, -w / 2, -h / 2, w, h);
+    return canvas;
+  }
+
+  /* Offer a generated file to the user. Uses the in-preview save capability
+     when embedded in a Claude artifact frame; falls back to a plain
+     download link when running standalone (local file or deployed page). */
+  async function offerDownload(filename, blob) {
+    if (window.claude && typeof window.claude.use === "function") {
+      try {
+        const downloads = await window.claude.use("downloads");
+        if (downloads) {
+          try {
+            await downloads.save({ filename, data: blob });
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, code: err && err.code, message: err && err.message };
+          }
+        }
+      } catch (err) {
+        /* capability unavailable — fall through to classic download */
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return { ok: true };
+  }
+
+  function explainDownloadError(res) {
+    if (res.code === "rejected_extension" || res.code === "extension_not_enabled") {
+      return "Can't save this file type from the in-chat preview — open the standalone page to download it.";
+    }
+    if (res.code === "declined") return "Save was declined.";
+    if (res.code === "rate_limited") return "Still waiting on the last save prompt — try again in a moment.";
+    if (res.code === "too_large") return "File is too large to save from this preview.";
+    return "Couldn't save the file — try the standalone page.";
+  }
+
+  function setupDropzone(zoneEl, inputEl, onFiles) {
+    zoneEl.addEventListener("click", () => inputEl.click());
+    zoneEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputEl.click(); }
+    });
+    inputEl.addEventListener("change", () => {
+      onFiles(Array.from(inputEl.files));
+      inputEl.value = "";
+    });
+    ["dragenter", "dragover"].forEach((evt) =>
+      zoneEl.addEventListener(evt, (e) => { e.preventDefault(); zoneEl.classList.add("drag-over"); })
+    );
+    ["dragleave", "drop"].forEach((evt) =>
+      zoneEl.addEventListener(evt, (e) => { e.preventDefault(); zoneEl.classList.remove("drag-over"); })
+    );
+    zoneEl.addEventListener("drop", (e) => {
+      const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+      if (files.length) onFiles(files);
+    });
+  }
+
+  /* ================= CROP & ROTATE EDITOR ================= */
+  const openCropEditor = (function () {
+    const cropModal = document.getElementById("crop-modal");
+    const cropFilename = document.getElementById("crop-filename");
+    const cropStage = document.getElementById("crop-stage");
+    const cropImg = document.getElementById("crop-img");
+    const cropBox = document.getElementById("crop-box");
+    const cropHandle = document.getElementById("crop-handle");
+    const cropDims = document.getElementById("crop-dims");
+    const cropAspects = document.getElementById("crop-aspects");
+    const cropCloseBtn = document.getElementById("crop-close");
+    const cropResetBtn = document.getElementById("crop-reset");
+    const cropApplyBtn = document.getElementById("crop-apply");
+    const cropRotateCcw = document.getElementById("crop-rotate-ccw");
+    const cropRotateCw = document.getElementById("crop-rotate-cw");
+    const cropRotatePreview = document.getElementById("crop-rotate-preview");
+
+    let cropItem = null;
+    let onApplyCallback = null;
+    let cropAspect = null; // null = free, else w/h ratio
+    let cropRotation = 0; // draft rotation in degrees, applied on Apply
+    let dispScale = 1; // natural px per displayed px
+    let drag = null; // { mode: 'move'|'resize', startX, startY, box: {x,y,w,h} }
+
+    function updateRotatePreview() {
+      cropRotatePreview.style.transform = `rotate(${cropRotation}deg)`;
+    }
+
+    function naturalToDisplay(rect) {
+      return { x: rect.x / dispScale, y: rect.y / dispScale, w: rect.w / dispScale, h: rect.h / dispScale };
+    }
+    function displayToNatural(rect) {
+      return { x: rect.x * dispScale, y: rect.y * dispScale, w: rect.w * dispScale, h: rect.h * dispScale };
+    }
+
+    function paintBox(dispRect) {
+      cropBox.style.left = dispRect.x + "px";
+      cropBox.style.top = dispRect.y + "px";
+      cropBox.style.width = dispRect.w + "px";
+      cropBox.style.height = dispRect.h + "px";
+      const nat = displayToNatural(dispRect);
+      cropDims.textContent = `${Math.round(nat.w)} × ${Math.round(nat.h)} px`;
+    }
+
+    function clampBoxToStage(dispRect, stageW, stageH) {
+      let { x, y, w, h } = dispRect;
+      w = Math.max(20, Math.min(w, stageW));
+      h = Math.max(20, Math.min(h, stageH));
+      x = Math.max(0, Math.min(x, stageW - w));
+      y = Math.max(0, Math.min(y, stageH - h));
+      return { x, y, w, h };
+    }
+
+    /* Clamp while preserving a fixed aspect ratio — shrinks whichever
+       dimension overflows the stage first, then recomputes the other
+       from the ratio so the box never distorts. */
+    function clampAspectBox(dispRect, ratio, stageW, stageH) {
+      let { x, y, w } = dispRect;
+      w = Math.max(20, w);
+      let h = w / ratio;
+      if (w > stageW) { w = stageW; h = w / ratio; }
+      if (h > stageH) { h = stageH; w = h * ratio; }
+      x = Math.max(0, Math.min(x, stageW - w));
+      y = Math.max(0, Math.min(y, stageH - h));
+      return { x, y, w, h };
+    }
+
+    function currentDispRect() {
+      return {
+        x: parseFloat(cropBox.style.left) || 0,
+        y: parseFloat(cropBox.style.top) || 0,
+        w: parseFloat(cropBox.style.width) || 0,
+        h: parseFloat(cropBox.style.height) || 0,
+      };
+    }
+
+    function closeCropModal() {
+      cropModal.hidden = true;
+      cropItem = null;
+    }
+
+    cropCloseBtn.addEventListener("click", closeCropModal);
+    cropModal.addEventListener("click", (e) => { if (e.target === cropModal) closeCropModal(); });
+
+    cropAspects.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-aspect]");
+      if (!btn) return;
+      cropAspects.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const val = btn.dataset.aspect;
+      const stageW = cropImg.clientWidth, stageH = cropImg.clientHeight;
+      if (val === "free") {
+        cropAspect = null;
+      } else {
+        const [aw, ah] = val.split(":").map(Number);
+        cropAspect = aw / ah;
+        const fitted = clampAspectBox({ x: 0, y: 0, w: stageW }, cropAspect, stageW, stageH);
+        paintBox({ x: (stageW - fitted.w) / 2, y: (stageH - fitted.h) / 2, w: fitted.w, h: fitted.h });
+      }
+    });
+
+    cropResetBtn.addEventListener("click", () => {
+      cropAspect = null;
+      cropRotation = 0;
+      updateRotatePreview();
+      cropAspects.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.aspect === "free"));
+      const stageW = cropImg.clientWidth, stageH = cropImg.clientHeight;
+      paintBox({ x: 0, y: 0, w: stageW, h: stageH });
+    });
+
+    cropRotateCcw.addEventListener("click", () => { cropRotation = (cropRotation + 270) % 360; updateRotatePreview(); });
+    cropRotateCw.addEventListener("click", () => { cropRotation = (cropRotation + 90) % 360; updateRotatePreview(); });
+
+    cropApplyBtn.addEventListener("click", () => {
+      if (!cropItem) return;
+      const nat = displayToNatural(currentDispRect());
+      const full =
+        Math.round(nat.x) <= 0 &&
+        Math.round(nat.y) <= 0 &&
+        Math.round(nat.w) >= cropItem.img.naturalWidth - 1 &&
+        Math.round(nat.h) >= cropItem.img.naturalHeight - 1;
+      cropItem.cropRect = full
+        ? null
+        : {
+            x: Math.round(nat.x),
+            y: Math.round(nat.y),
+            w: Math.round(nat.w),
+            h: Math.round(nat.h),
+          };
+      cropItem.rotation = cropRotation;
+      const cb = onApplyCallback;
+      closeCropModal();
+      if (cb) cb();
+    });
+
+    cropBox.addEventListener("pointerdown", (e) => {
+      if (e.target === cropHandle) return;
+      e.preventDefault();
+      cropBox.setPointerCapture(e.pointerId);
+      drag = { mode: "move", startX: e.clientX, startY: e.clientY, box: currentDispRect() };
+    });
+    cropHandle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cropHandle.setPointerCapture(e.pointerId);
+      drag = { mode: "resize", startX: e.clientX, startY: e.clientY, box: currentDispRect() };
+    });
+    cropStage.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const stageW = cropImg.clientWidth, stageH = cropImg.clientHeight;
+      const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+      if (drag.mode === "move") {
+        paintBox(clampBoxToStage({ ...drag.box, x: drag.box.x + dx, y: drag.box.y + dy }, stageW, stageH));
+      } else if (cropAspect) {
+        const w = Math.max(20, drag.box.w + dx);
+        paintBox(clampAspectBox({ x: drag.box.x, y: drag.box.y, w }, cropAspect, stageW, stageH));
+      } else {
+        const w = Math.max(20, drag.box.w + dx);
+        const h = Math.max(20, drag.box.h + dy);
+        paintBox(clampBoxToStage({ x: drag.box.x, y: drag.box.y, w, h }, stageW, stageH));
+      }
+    });
+    window.addEventListener("pointerup", () => { drag = null; });
+
+    /* Public entry point: item needs {img, url, name, cropRect, rotation}.
+       onApply is called after item.cropRect/item.rotation are updated, so
+       the caller can re-render its own list / clear cached output. */
+    return function openCropEditor(item, onApply) {
+      cropItem = item;
+      onApplyCallback = onApply;
+      cropAspect = null;
+      cropRotation = item.rotation || 0;
+      cropAspects.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.aspect === "free"));
+      cropFilename.textContent = "— " + item.name;
+      cropImg.src = item.url;
+      cropRotatePreview.src = item.url;
+      updateRotatePreview();
+      cropModal.hidden = false;
+
+      const showBox = () => {
+        const displayedW = cropImg.clientWidth;
+        dispScale = item.img.naturalWidth / displayedW;
+        const rect = item.cropRect
+          ? naturalToDisplay(item.cropRect)
+          : { x: 0, y: 0, w: displayedW, h: cropImg.clientHeight };
+        paintBox(clampBoxToStage(rect, displayedW, cropImg.clientHeight));
+      };
+      if (cropImg.complete) showBox();
+      else cropImg.onload = showBox;
+    };
+  })();
+
+  /* ================= PDF MAKER ================= */
+  (function () {
+    const listEl = document.getElementById("p-list");
+    const emptyEl = document.getElementById("p-empty");
+    const countEl = document.getElementById("pdf-count");
+    const buildBtn = document.getElementById("p-build");
+    const statusEl = document.getElementById("p-status");
+    const pageModeSel = document.getElementById("p-pagemode");
+    const qualityInput = document.getElementById("p-quality");
+    const qualityValue = document.getElementById("p-quality-value");
+    const watermarkInput = document.getElementById("p-watermark");
+    const printBtn = document.getElementById("p-print");
+    qualityInput.value = qualityInput.getAttribute("value");
+
+    let items = [];
+    let seq = 0;
+
+    function syncQualityUI() {
+      qualityValue.textContent = Math.round(parseFloat(qualityInput.value) * 100) + "%";
+    }
+
+    function render() {
+      countEl.textContent = items.length + (items.length === 1 ? " page queued" : " pages queued");
+      emptyEl.hidden = items.length > 0;
+      listEl.hidden = items.length === 0;
+      buildBtn.disabled = items.length === 0;
+      listEl.innerHTML = "";
+
+      items.forEach((item, i) => {
+        const row = document.createElement("div");
+        row.className = "file-row";
+
+        const baseW = item.cropRect ? item.cropRect.w : item.img.naturalWidth;
+        const baseH = item.cropRect ? item.cropRect.h : item.img.naturalHeight;
+        const rotation = item.rotation || 0;
+        const oriented = rotation === 90 || rotation === 270 ? { w: baseH, h: baseW } : { w: baseW, h: baseH };
+        const tags = [];
+        if (item.cropRect) tags.push("cropped");
+        if (rotation) tags.push(`rotated ${rotation}°`);
+        const tagsHtml = tags.map((t) => `<span class="crop-tag">${t}</span>`).join(" ");
+
+        row.innerHTML = `
+          <img class="thumb" src="${item.url}" alt="">
+          <span class="name" title="${item.name}">${item.name} ${tagsHtml}</span>
+          <span class="meta">${oriented.w}&times;${oriented.h}</span>
+          <span class="meta">Page ${i + 1}</span>
+          <button class="row-btn" data-action="edit">Crop</button>
+          <div class="row-order">
+            <button data-action="up" ${i === 0 ? "disabled" : ""} aria-label="Move up">&uarr;</button>
+            <button data-action="down" ${i === items.length - 1 ? "disabled" : ""} aria-label="Move down">&darr;</button>
+          </div>
+          <button class="row-btn ghost" data-action="remove" aria-label="Remove ${item.name}">&times;</button>
+        `;
+        row.querySelector('[data-action="edit"]').addEventListener("click", () => {
+          openCropEditor(item, render);
+        });
+        row.querySelector('[data-action="up"]')?.addEventListener("click", () => {
+          [items[i - 1], items[i]] = [items[i], items[i - 1]];
+          render();
+        });
+        row.querySelector('[data-action="down"]')?.addEventListener("click", () => {
+          [items[i + 1], items[i]] = [items[i], items[i + 1]];
+          render();
+        });
+        row.querySelector('[data-action="remove"]').addEventListener("click", () => {
+          URL.revokeObjectURL(item.url);
+          items = items.filter((it) => it !== item);
+          render();
+        });
+        listEl.appendChild(row);
+      });
+    }
+
+    async function addFiles(files) {
+      for (const file of files) {
+        const { img, url } = await loadImage(file);
+        items.push({ id: seq++, file, img, url, name: file.name, cropRect: null, rotation: 0 });
+      }
+      render();
+    }
+
+    setupDropzone(document.getElementById("p-dropzone"), document.getElementById("p-input"), addFiles);
+    qualityInput.addEventListener("input", syncQualityUI);
+
+    /* ---- minimal PDF writer: one JPEG image per page ---- */
+    class PdfWriter {
+      constructor() { this.chunks = []; this.length = 0; this.enc = new TextEncoder(); }
+      writeStr(s) { const b = this.enc.encode(s); this.chunks.push(b); this.length += b.length; }
+      writeBytes(b) { this.chunks.push(b); this.length += b.length; }
+      get offset() { return this.length; }
+      toBlob() { return new Blob(this.chunks, { type: "application/pdf" }); }
+    }
+
+    function dataUrlToBytes(dataUrl) {
+      const b64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+
+    function pageGeometry(mode, pxW, pxH) {
+      if (mode === "a4") {
+        const pageW = 595.28, pageH = 841.89, margin = 36;
+        const maxW = pageW - margin * 2, maxH = pageH - margin * 2;
+        const imgAspect = pxW / pxH, areaAspect = maxW / maxH;
+        let sw, sh;
+        if (imgAspect > areaAspect) { sw = maxW; sh = maxW / imgAspect; }
+        else { sh = maxH; sw = sh * imgAspect; }
+        const tx = margin + (maxW - sw) / 2, ty = margin + (maxH - sh) / 2;
+        return { pageW, pageH, sw, sh, tx, ty };
+      }
+      const pageW = pxW * 0.75, pageH = pxH * 0.75;
+      return { pageW, pageH, sw: pageW, sh: pageH, tx: 0, ty: 0 };
+    }
+
+    function escapePdfText(s) {
+      return s
+        .split("")
+        .filter((ch) => ch.charCodeAt(0) < 256)
+        .join("")
+        .replace(/\\/g, "\\\\")
+        .replace(/\(/g, "\\(")
+        .replace(/\)/g, "\\)");
+    }
+
+    /* Diagonal, low-opacity text drawn across the page — angled to the
+       page's own diagonal so it looks fitted on both portrait and
+       landscape pages. Uses a base-14 font (Helvetica), so no font file
+       needs embedding. */
+    function watermarkContent(text, pageW, pageH) {
+      const fontSize = Math.min(pageW, pageH) * 0.09;
+      const angleRad = Math.atan2(pageH, pageW);
+      const cos = Math.cos(angleRad).toFixed(5), sin = Math.sin(angleRad).toFixed(5);
+      const cx = (pageW / 2).toFixed(2), cy = (pageH / 2).toFixed(2);
+      const approxWidth = text.length * fontSize * 0.55;
+      return (
+        `q /GS0 gs 1 0 0 1 ${cx} ${cy} cm ${cos} ${sin} -${sin} ${cos} 0 0 cm ` +
+        `BT /F0 ${fontSize.toFixed(2)} Tf 0.4 g ${(-approxWidth / 2).toFixed(2)} 0 Td (${escapePdfText(text)}) Tj ET Q`
+      );
+    }
+
+    function buildPdfBlob(pages, mode, watermarkText) {
+      const w = new PdfWriter();
+      w.writeStr("%PDF-1.4\n");
+      w.writeBytes(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+
+      const N = pages.length;
+      const totalObjs = 4 + N * 3; // Catalog, Pages, Font, ExtGState, then N * (Page, Contents, Image)
+      const offsets = {};
+
+      offsets[1] = w.offset;
+      w.writeStr("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+      offsets[2] = w.offset;
+      const kids = [];
+      for (let i = 0; i < N; i++) kids.push(`${5 + i * 3} 0 R`);
+      w.writeStr(`2 0 obj\n<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${N} >>\nendobj\n`);
+
+      offsets[3] = w.offset;
+      w.writeStr("3 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n");
+
+      offsets[4] = w.offset;
+      w.writeStr("4 0 obj\n<< /Type /ExtGState /ca 0.18 /CA 0.18 >>\nendobj\n");
+
+      pages.forEach((p, i) => {
+        const pageNum = 5 + i * 3, contentNum = 6 + i * 3, imgNum = 7 + i * 3;
+        const geo = pageGeometry(mode, p.width, p.height);
+
+        offsets[pageNum] = w.offset;
+        w.writeStr(
+          `${pageNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${geo.pageW.toFixed(2)} ${geo.pageH.toFixed(2)}] ` +
+          `/Resources << /XObject << /Im0 ${imgNum} 0 R >> /Font << /F0 3 0 R >> /ExtGState << /GS0 4 0 R >> >> /Contents ${contentNum} 0 R >>\nendobj\n`
+        );
+
+        let content = `q ${geo.sw.toFixed(2)} 0 0 ${geo.sh.toFixed(2)} ${geo.tx.toFixed(2)} ${geo.ty.toFixed(2)} cm /Im0 Do Q`;
+        if (watermarkText) content += "\n" + watermarkContent(watermarkText, geo.pageW, geo.pageH);
+        const contentBytes = new TextEncoder().encode(content);
+        offsets[contentNum] = w.offset;
+        w.writeStr(`${contentNum} 0 obj\n<< /Length ${contentBytes.length} >>\nstream\n`);
+        w.writeBytes(contentBytes);
+        w.writeStr("\nendstream\nendobj\n");
+
+        offsets[imgNum] = w.offset;
+        w.writeStr(
+          `${imgNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.width} /Height ${p.height} ` +
+          `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.jpegBytes.length} >>\nstream\n`
+        );
+        w.writeBytes(p.jpegBytes);
+        w.writeStr("\nendstream\nendobj\n");
+      });
+
+      const xrefOffset = w.offset;
+      let xref = `xref\n0 ${totalObjs + 1}\n0000000000 65535 f \n`;
+      for (let n = 1; n <= totalObjs; n++) xref += String(offsets[n]).padStart(10, "0") + " 00000 n \n";
+      w.writeStr(xref);
+      w.writeStr(`trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+      return w.toBlob();
+    }
+
+    let lastPdfUrl = null;
+
+    buildBtn.addEventListener("click", async () => {
+      if (!items.length) return;
+      buildBtn.disabled = true;
+      statusEl.textContent = "Building…";
+      try {
+        const quality = parseFloat(qualityInput.value);
+        const mode = pageModeSel.value;
+        const watermarkText = watermarkInput.value.trim();
+        const pages = items.map((item) => {
+          const canvas = drawCroppedRotated(item.img, item.cropRect, item.rotation, 2400);
+          const dataUrl = canvas.toDataURL("image/jpeg", quality);
+          return { width: canvas.width, height: canvas.height, jpegBytes: dataUrlToBytes(dataUrl) };
+        });
+        const blob = buildPdfBlob(pages, mode, watermarkText);
+
+        if (lastPdfUrl) URL.revokeObjectURL(lastPdfUrl);
+        lastPdfUrl = URL.createObjectURL(blob);
+        printBtn.disabled = false;
+
+        const res = await offerDownload("document.pdf", blob);
+        statusEl.textContent = res.ok
+          ? `Done — ${formatBytes(blob.size)}, ${pages.length} page${pages.length > 1 ? "s" : ""}`
+          : explainDownloadError(res);
+      } catch (err) {
+        statusEl.textContent = "Failed to build PDF — see console.";
+        console.error(err);
+      } finally {
+        buildBtn.disabled = items.length === 0;
+      }
+    });
+
+    printBtn.addEventListener("click", () => {
+      if (!lastPdfUrl) return;
+      const win = window.open(lastPdfUrl, "_blank");
+      if (!win) statusEl.textContent = "Couldn't open a print tab — check your popup blocker.";
+    });
+
+    syncQualityUI();
+  })();
+})();
+</script>
+</body>
+</html>
